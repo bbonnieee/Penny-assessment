@@ -25,6 +25,19 @@
   separate reject policy in the convention, so rejecting needs the same approve permission.
 - Result: all 7 provided tests pass (`npm test`).
 
+**Task 2: Change Request list** (`src/components/cr-list/`)
+- **Status filter.** `visibleRows` returns every row for `ALL`, otherwise only rows whose status matches
+  `statusFilter`. It uses `filter`, so the loaded `state.data` is never changed and switching back to
+  `ALL` needs no reload.
+- **"No matches" state.** A `hasNoMatches` getter (loaded, but the filter leaves zero rows) hides the
+  table and shows "No change requests with status X" with a **Show all** button (`clearFilter()`).
+  This is separate from the existing `empty` state, which means the org has no CRs at all.
+- **Dropdown kept in sync.** Each `<option>` binds `[selected]="s === statusFilter"`, so the select
+  shows `ALL` again after **Show all** resets the filter from code.
+- **Formatted delta.** The Delta column uses `formatMoney` with the CR's currency (`USD 500.00`)
+  instead of a raw number.
+- The existing loading / error (with Retry) / empty states are unchanged.
+
 **Repo hygiene**
 - Added `.DS_Store` to `.gitignore` and removed it from tracking (it was in the initial commit).
 - Kept the changed files Prettier-clean to match the project style (`printWidth: 140`).
@@ -60,7 +73,14 @@ rendered state can be traced back to a small, explicit set of fields.
 ## 5. Assumptions
 <!-- Where the requirements left room for interpretation, the calls you made and why. -->
 
--
+- **A description-only change counts as "changed" in the diff.** CR-2 ("Replace SKU-B supplier")
+  only changes the description; treating it as unchanged would hide the whole point of that CR.
+- **Reject uses the same permission as Approve.** The policy convention has no separate reject action,
+  and rejecting is part of the approval decision.
+- **"No CRs match this filter" is shown separately from "no CRs at all".** An empty table after filtering
+  would look like a broken page; a message plus a one-click reset tells the user why and how to recover.
+- **The filter is client-side.** The mock API returns the whole org list in one call, so filtering the
+  loaded rows is enough; with a paged real API this would move to a query parameter.
 
 ## 6. Where I used AI
 -

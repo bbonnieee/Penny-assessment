@@ -4,7 +4,7 @@
 		<label>
 			Status
 			<select class="cr-list__filter" [value]="statusFilter" (change)="onFilterChange($any($event.target).value)">
-				<option *ngFor="let s of statuses" [value]="s">{{ s }}</option>
+				<option *ngFor="let s of statuses" [value]="s" [selected]="s === statusFilter">{{ s }}</option>
 			</select>
 		</label>
 	</header>
@@ -18,7 +18,12 @@
 
 	<p *ngIf="state.status === 'empty'" class="cr-list__empty">No change requests to show.</p>
 
-	<table *ngIf="state.status === 'loaded'" class="cr-list__table">
+	<p *ngIf="hasNoMatches" class="cr-list__no-matches">
+		No change requests with status {{ statusFilter }}.
+		<button type="button" (click)="clearFilter()">Show all</button>
+	</p>
+
+	<table *ngIf="state.status === 'loaded' && !hasNoMatches" class="cr-list__table">
 		<thead>
 			<tr>
 				<th>ID</th>
@@ -32,7 +37,7 @@
 				<td>{{ cr.id }}</td>
 				<td>{{ cr.title }}</td>
 				<td><span class="cr-status" [attr.data-status]="cr.status">{{ cr.status }}</span></td>
-				<td>{{ cr.delta }}</td>
+				<td>{{ fmtDelta(cr) }}</td>
 			</tr>
 		</tbody>
 	</table>
