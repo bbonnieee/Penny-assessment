@@ -49,11 +49,11 @@
 		</section>
 
 		<!-- Actions -->
-		<section class="cr-actions">
+		<section class="cr-actions" [attr.aria-busy]="submitting">
 			<p *ngIf="actionError" class="cr-actions__error" role="alert">{{ actionError }}</p>
 
 			<button type="button" class="cr-actions__approve" [disabled]="!canApprove || submitting" (click)="approve()">
-				Approve
+				{{ pendingAction === 'approve' ? 'Approving…' : 'Approve' }}
 			</button>
 
 			<div class="cr-actions__reject" *ngIf="canReject">
@@ -61,11 +61,14 @@
 					Reason for rejection
 					<textarea class="cr-actions__reason" [formControl]="rejectControl"></textarea>
 				</label>
-				<p *ngIf="rejectControl.invalid && rejectControl.touched" class="cr-actions__reason-error" role="alert">
-					Please enter a reason.
-				</p>
+				<ng-container *ngIf="rejectControl.touched && rejectControl.errors as errors">
+					<p *ngIf="errors['blank']" class="cr-actions__reason-error" role="alert">Please enter a reason.</p>
+					<p *ngIf="errors['maxlength']" class="cr-actions__reason-error" role="alert">
+						Keep the reason to {{ reasonMax }} characters or fewer.
+					</p>
+				</ng-container>
 				<button type="button" class="cr-actions__reject-btn" [disabled]="!canReject || submitting || rejectControl.invalid" (click)="reject()">
-					Reject
+					{{ pendingAction === 'reject' ? 'Rejecting…' : 'Reject' }}
 				</button>
 			</div>
 		</section>

@@ -138,4 +138,183 @@ describe('CrDetailComponent', () => {
 			expect(detail.rejectControl.value).toBe('');
 		});
 	});
+
+	describe('reject reason validation', () => {
+		it('keeps Reject disabled until the reason has real text', async () => {
+			const fixture = await render(users.approver, 'CR-1');
+			expect(rejectBtn(fixture).disabled).toBe(true);
+
+			typeReason(fixture, '   \n ');
+			expect(rejectBtn(fixture).disabled).toBe(true);
+
+			typeReason(fixture, 'Price too high');
+			expect(rejectBtn(fixture).disabled).toBe(false);
+		});
+
+		it('shows "Please enter a reason." once the empty field has been left', async () => {
+			const fixture = await render(users.approver, 'CR-1');
+			expect(fixture.nativeElement.querySelector('.cr-actions__reason-error')).toBeNull(); // not before touching
+
+			reasonBox(fixture).dispatchEvent(new Event('blur'));
+			fixture.detectChanges();
+			expect(fixture.nativeElement.querySelector('.cr-actions__reason-error').textContent).toContain('Please enter a reason.');
+		});
+
+		it('blocks a reason longer than the limit with its own message', async () => {
+			const fixture = await render(users.approver, 'CR-1');
+			typeReason(fixture, 'x'.repeat(501));
+			reasonBox(fixture).dispatchEvent(new Event('blur'));
+			fixture.detectChanges();
+			expect(rejectBtn(fixture).disabled).toBe(true);
+			expect(fixture.nativeElement.querySelector('.cr-actions__reason-error').textContent).toContain('500 characters or fewer');
+		});
+
+		it('does not call the API when reject() runs with an invalid reason', async () => {
+			const fixture = await render(users.approver, 'CR-1');
+			const spy = jest.spyOn(TestBed.inject(CrApiService), 'reject');
+			await fixture.componentInstance.reject();
+			expect(spy).not.toHaveBeenCalled();
+			expect(fixture.componentInstance.rejectControl.touched).toBe(true);
+		});
+	});
+
+	describe('approve / reject actions', () => {
+		it('approves: shows the new status, adds the timeline entry, and removes the actions', async () => {
+			const fixture = await render(users.approver, 'CR-1');
+			approveBtn(fixture).click();
+			await settle(fixture);
+
+			expect(statusText(fixture)).toBe('APPROVED');
+			expect(approveBtn(fixture).disabled).toBe(true);
+			expect(fixture.nativeElement.querySelector('.cr-actions__reject')).toBeNull();
+			const last = lastTimelineEntry(fixture);
+			expect(last.querySelector('.cr-timeline__action')?.textContent).toBe('APPROVE');
+			expect(last.querySelector('.cr-timeline__by')?.textContent).toBe('mona');
+		});
+
+		it('rejects with the trimmed reason and shows it in the timeline', async () => {
+			const fixture = await render(users.approver, 'CR-1');
+			const spy = jest.spyOn(TestBed.inject(CrApiService), 'reject');
+			typeReason(fixture, '  Price too high  ');
+			rejectBtn(fixture).click();
+			await settle(fixture);
+
+			expect(spy).toHaveBeenCalledWith(users.approver, 'CR-1', expect.any(String), 'Price too high');
+			expect(statusText(fixture)).toBe('REJECTED');
+			expect(lastTimelineEntry(fixture).querySelector('.cr-timeline__note')?.textContent).toBe('“Price too high”');
+		});
+
+		it('locks every control during a slow request and sends only one request on a double click', async () => {
+			const fixture = await render(users.approver, 'CR-1');
+			const api = TestBed.inject(CrApiService);
+			const spy = jest.spyOn(api, 'approve');
+			api.latencyMs = 50;
+
+			approveBtn(fixture).click();
+			fixture.detectChanges();
+			expect(approveBtn(fixture).disabled).toBe(true);
+			expect(approveBtn(fixture).textContent?.trim()).toBe('Approving…');
+			expect(rejectBtn(fixture).disabled).toBe(true);
+			expect(reasonBox(fixture).disabled).toBe(true);
+			expect(fixture.nativeElement.querySelector('.cr-actions').getAttribute('aria-busy')).toBe('true');
+
+			approveBtn(fixture).click(); // ignored: the button is disabled
+			await fixture.componentInstance.approve(); // ignored: the component guard
+			expect(spy).toHaveBeenCalledTimes(1);
+
+			await settle(fixture, 80);
+			expect(statusText(fixture)).toBe('APPROVED');
+		});
+
+		it('on a real failure keeps the CR on screen, explains, and lets the user try again', async () => {
+			const fixture = await render(users.approver, 'CR-1');
+			jest.spyOn(TestBed.inject(CrApiService), 'approve').mockImplementationOnce(() => failsLater('Server unavailable'));
+			approveBtn(fixture).click();
+			await settle(fixture, 10);
+
+			expect(errorText(fixture)).toBe("Couldn't approve this change request: Server unavailable. Please try again.");
+			expect(title(fixture)).toBe('Add 1 unit of SKU-A');
+			expect(statusText(fixture)).toBe('PENDING_APPROVAL');
+			expect(approveBtn(fixture).disabled).toBe(false);
+		});
+
+		it('when the request errors but the server applied it anyway, shows the real status', async () => {
+			const fixture = await render(users.approver, 'CR-1');
+			TestBed.inject(CrApiService).failNext = true; // the mock saves the change, then reports a network error
+			approveBtn(fixture).click();
+			await settle(fixture, 10);
+
+			expect(errorText(fixture)).toContain('the change request is now APPROVED');
+			expect(statusText(fixture)).toBe('APPROVED');
+			expect(approveBtn(fixture).disabled).toBe(true);
+		});
+
+		it('keeps the last known CR if both the action and the re-read fail', async () => {
+			const fixture = await render(users.approver, 'CR-1');
+			const api = TestBed.inject(CrApiService);
+			jest.spyOn(api, 'approve').mockImplementationOnce(() => failsLater('Server unavailable'));
+			jest.spyOn(api, 'getChangeRequest').mockImplementationOnce(() => failsLater('Network error'));
+			approveBtn(fixture).click();
+			await settle(fixture, 10);
+
+			expect(errorText(fixture)).toContain("Couldn't approve");
+			expect(title(fixture)).toBe('Add 1 unit of SKU-A');
+			expect(approveBtn(fixture).disabled).toBe(false);
+		});
+
+		it('never calls the API for a read-only user, even if approve() is invoked directly', async () => {
+			const fixture = await render(users.viewer, 'CR-1');
+			const spy = jest.spyOn(TestBed.inject(CrApiService), 'approve');
+			await fixture.componentInstance.approve();
+			expect(spy).not.toHaveBeenCalled();
+		});
+
+		it('ignores the result of an approve that finishes after the user switched CRs', async () => {
+			const fixture = await renderHost(users.approver);
+			const api = TestBed.inject(CrApiService);
+			const detail = fixture.debugElement.children[0].componentInstance as CrDetailComponent;
+			api.latencyMs = 50;
+			approveBtn(fixture).click(); // slow approve on CR-1
+
+			api.latencyMs = 0;
+			fixture.componentInstance.id = 'CR-3';
+			fixture.detectChanges();
+			await settle(fixture, 80);
+
+			expect(title(fixture)).toBe('Extend agreement term');
+			expect(fixture.nativeElement.querySelector('.cr-actions__error')).toBeNull();
+			expect(detail.pendingAction).toBeNull();
+		});
+	});
 });
+
+async function settle(fixture: ComponentFixture<unknown>, ms = 0): Promise<void> {
+	await flush(ms);
+	fixture.detectChanges();
+}
+
+function el<T extends HTMLElement>(fixture: ComponentFixture<unknown>, selector: string): T {
+	return fixture.nativeElement.querySelector(selector) as T;
+}
+
+const approveBtn = (f: ComponentFixture<unknown>) => el<HTMLButtonElement>(f, '.cr-actions__approve');
+const rejectBtn = (f: ComponentFixture<unknown>) => el<HTMLButtonElement>(f, '.cr-actions__reject-btn');
+const reasonBox = (f: ComponentFixture<unknown>) => el<HTMLTextAreaElement>(f, '.cr-actions__reason');
+const statusText = (f: ComponentFixture<unknown>) => el(f, '.cr-detail__header .cr-status').textContent;
+const errorText = (f: ComponentFixture<unknown>) => el(f, '.cr-actions__error')?.textContent;
+const lastTimelineEntry = (f: ComponentFixture<unknown>): HTMLElement => {
+	const entries = f.nativeElement.querySelectorAll('.cr-timeline__entry');
+	return entries[entries.length - 1];
+};
+
+function typeReason(fixture: ComponentFixture<unknown>, text: string): void {
+	const box = reasonBox(fixture);
+	box.value = text;
+	box.dispatchEvent(new Event('input'));
+	fixture.detectChanges();
+}
+
+/** A rejection that arrives asynchronously, like a real network error (and like the mock API's own failures). */
+function failsLater<T>(message: string): Promise<T> {
+	return new Promise<T>((_, reject) => setTimeout(() => reject(new Error(message)), 0));
+}

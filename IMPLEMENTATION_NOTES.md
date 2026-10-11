@@ -57,6 +57,31 @@
 - Tests (through a small host component, so `[id]` changes go through `ngOnChanges` as in the app):
   switching ids reloads and shows the loading state, a slow older response is ignored, a half-typed
   reason is cleared. I checked that these fail when the reload or the stale-response guard is removed.
+- **Reject reason validation.** `rejectControl` has two validators: `notBlank` (a reason of only spaces or
+  newlines is no reason) and `maxLength(500)`. Reject stays disabled while the reason is invalid; once the
+  field has been left, the matching message shows ("Please enter a reason." / "Keep the reason to 500
+  characters or fewer."). `reject()` also checks validity itself and sends the **trimmed** reason.
+- **Approve / Reject actions.** Both go through one `runAction()`:
+  1. It refuses to run if the user can't act (`canAct`) or a request is already in flight, so a double
+     click, or a call that bypasses the disabled button, sends exactly one request.
+  2. `pendingAction` ('approve' | 'reject' | null) records what is in flight; `submitting` is derived from
+     it, so the two can't disagree. While it is set, both buttons and the reason box are disabled, the
+     button reads "Approving…" / "Rejecting…", and the actions section has `aria-busy="true"`.
+  3. On success, the CR returned by the API replaces the loaded one, so the status badge, timeline and
+     action availability all update from the same data (an approved/rejected CR has no enabled actions).
+  4. On failure, it **re-reads the CR before reporting**, because the request may have been applied even
+     though the response failed (the mock does exactly this with `failNext`). If the status changed, the
+     message says so ("…but the change request is now APPROVED"); otherwise it says "Couldn't approve…
+     Please try again." and the actions are available again. If the re-read fails too, the last known CR
+     stays on screen. The page never blanks out on an action error.
+  5. If the user switched to another CR while the request was in flight, the result is ignored (same
+     `requestSeq` check as loading).
+- Tests: blank / whitespace / too-long reasons, the message appearing only after the field is touched,
+  `reject()` not calling the API when invalid, approve success (status, timeline entry, actions gone),
+  reject with trimmed reason shown in the timeline, a slow request locking every control and a double
+  click sending one request, a real failure, a failure the server applied anyway, a failure whose re-read
+  also fails, a read-only user calling `approve()` directly, and an approve finishing after a CR switch.
+  For each safeguard I temporarily removed it and confirmed at least one of these tests fails.
 
 **Repo hygiene**
 - Added `.DS_Store` to `.gitignore` and removed it from tracking (it was in the initial commit).
@@ -88,7 +113,11 @@ rendered state can be traced back to a small, explicit set of fields.
 | The timeline always reads oldest → newest, whatever order the API sends | `timeline` getter in `cr-detail.component.ts` |
 | Approve/Reject are only enabled for a pending CR in the user's org, for a user with an approve policy | `canAct` getter, bound to `[disabled]` / `*ngIf` in `cr-detail.component.html` |
 | The detail always shows the CR whose `id` is currently selected | `ngOnChanges` reloads on `id` change; `requestSeq` check in `load()` drops out-of-date responses |
-| Nothing typed or shown for one CR carries over to another | `resetForNewCr()` clears the reason, `actionError` and `submitting` before the new load |
+| Nothing typed or shown for one CR carries over to another | `resetForNewCr()` clears the reason, `actionError` and `pendingAction` before the new load |
+| At most one Approve/Reject request is in flight | `runAction()` returns early while `pendingAction` is set; buttons bind `[disabled]` to `submitting` |
+| Reject never reaches the API without a valid, trimmed reason | `notBlank` + `maxLength` validators; `reject()` re-checks validity and trims |
+| After an action, the screen shows what the server actually has | success uses the returned CR; failure re-reads the CR before showing the error |
+| An action error never blanks the page | errors go to `actionError`; `state` keeps the last known CR |
 
 ## 4. Testing strategy
 <!-- What you tested (component/DOM vs pure) and why; what you deliberately skipped given the budget. -->
@@ -108,6 +137,13 @@ rendered state can be traced back to a small, explicit set of fields.
   loaded rows is enough; with a paged real API this would move to a query parameter.
 - **Timeline times are shown in UTC.** This makes the display, and the tests, the same on every machine.
   A production app would show the reviewer's local time zone instead.
+- **A failed action is treated as "outcome unknown", not "nothing happened".** A response can fail after the
+  server has applied the change, so the CR is re-read before the error is shown, instead of letting the user
+  retry blindly and risk a second APPROVE/REJECT entry.
+- **Reject reason limit of 500 characters.** The API contract has no limit; 500 is my choice to keep audit
+  notes readable. I show a message rather than silently stopping input at the limit, so the user knows why.
+- **Read-only users still see a disabled Approve button** (the provided test expects it), while the reject
+  form is hidden for them, because a reason box they can never submit would only invite typing.
 
 ## 6. Where I used AI
 -
