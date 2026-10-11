@@ -10,11 +10,7 @@ export interface DiffRow {
 }
 
 function itemChanged(a: LineItem, b: LineItem): boolean {
-	return (
-		a.quantity !== b.quantity ||
-		a.unitPrice !== b.unitPrice ||
-		a.description !== b.description
-	);
+	return a.quantity !== b.quantity || a.unitPrice !== b.unitPrice || a.description !== b.description;
 }
 
 export function computeDiff(baseline: LineItem[], proposed: LineItem[]): DiffRow[] {
