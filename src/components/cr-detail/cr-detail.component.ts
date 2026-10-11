@@ -1,4 +1,4 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, OnChanges, OnInit, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { CrApiService } from '../../api/cr-api.service';
@@ -20,7 +20,7 @@ import { canApprovePolicy } from '../../common/permissions';
 	imports: [CommonModule, ReactiveFormsModule],
 	templateUrl: './cr-detail.component.html',
 })
-export class CrDetailComponent implements OnInit {
+export class CrDetailComponent implements OnInit, OnChanges {
 	@Input() id!: string;
 
 	state: ViewState<CrDetail> = idle();
@@ -29,21 +29,42 @@ export class CrDetailComponent implements OnInit {
 	// TODO: add validation so the form is invalid until a reason is entered.
 	rejectControl = new FormControl('', { nonNullable: true });
 
+	/** Bumped on every load; a response is only applied if no newer load has started since. */
+	private requestSeq = 0;
+
 	constructor(private readonly api: CrApiService, private readonly session: SessionService) {}
 
 	ngOnInit(): void {
 		void this.load();
 	}
 
+	/** The shell reuses this component when another CR is selected, so reload on later `id` changes. */
+	ngOnChanges(changes: SimpleChanges): void {
+		if (changes['id'] && !changes['id'].firstChange) {
+			this.resetForNewCr();
+			void this.load();
+		}
+	}
+
 	async load(): Promise<void> {
+		const seq = ++this.requestSeq;
 		this.state = loading();
 		this.actionError = undefined;
 		try {
 			const detail = await this.api.getChangeRequest(this.session.user, this.id);
+			if (seq !== this.requestSeq) return; // a newer load started; drop this stale response
 			this.state = { status: 'loaded', data: detail };
 		} catch (err) {
+			if (seq !== this.requestSeq) return;
 			this.state = { status: 'error', data: null, error: (err as Error).message };
 		}
+	}
+
+	/** Clear state that belongs to the previous CR (a typed reason, an error, an in-flight flag). */
+	private resetForNewCr(): void {
+		this.submitting = false;
+		this.actionError = undefined;
+		this.rejectControl.reset();
 	}
 
 	get detail(): CrDetail | null {

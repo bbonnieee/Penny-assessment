@@ -47,6 +47,16 @@
 - **Empty history.** A CR with no audit entries shows "No history recorded yet." instead of an empty list.
 - Tests: oldest-first order (CR-1), already-ordered history unchanged (CR-2), loaded data not reordered,
   UTC formatting + `datetime`, empty-history message.
+- **Bug found: selecting another CR didn't reload the detail.** The app shell keeps the same
+  `<app-cr-detail>` instance and only changes its `id` input, but `load()` ran only in `ngOnInit`, so the
+  old CR stayed on screen. `ngOnChanges` now reloads on any later `id` change and first clears state that
+  belonged to the previous CR (typed reject reason, action error, `submitting`).
+- **Stale responses are dropped.** Each `load()` takes a number from `requestSeq`; when a response
+  arrives, it is applied only if no newer load has started since. A slow answer for a CR the user has
+  already left can't overwrite the CR they are looking at now.
+- Tests (through a small host component, so `[id]` changes go through `ngOnChanges` as in the app):
+  switching ids reloads and shows the loading state, a slow older response is ignored, a half-typed
+  reason is cleared. I checked that these fail when the reload or the stale-response guard is removed.
 
 **Repo hygiene**
 - Added `.DS_Store` to `.gitignore` and removed it from tracking (it was in the initial commit).
@@ -77,6 +87,8 @@ rendered state can be traced back to a small, explicit set of fields.
 | Loaded API data is never changed by the view | `visibleRows` (list) and `timeline` (detail) return new arrays (`filter`, sort on a copy) |
 | The timeline always reads oldest → newest, whatever order the API sends | `timeline` getter in `cr-detail.component.ts` |
 | Approve/Reject are only enabled for a pending CR in the user's org, for a user with an approve policy | `canAct` getter, bound to `[disabled]` / `*ngIf` in `cr-detail.component.html` |
+| The detail always shows the CR whose `id` is currently selected | `ngOnChanges` reloads on `id` change; `requestSeq` check in `load()` drops out-of-date responses |
+| Nothing typed or shown for one CR carries over to another | `resetForNewCr()` clears the reason, `actionError` and `submitting` before the new load |
 
 ## 4. Testing strategy
 <!-- What you tested (component/DOM vs pure) and why; what you deliberately skipped given the budget. -->

@@ -1,10 +1,38 @@
+import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CrDetailComponent } from './cr-detail.component';
 import { SessionService } from '../../session/session.service';
+import { CrApiService } from '../../api/cr-api.service';
 import { users } from '../../api/fixtures';
 import { CrDetail, ReqUser } from '../../models/cr.models';
 
-const flush = () => new Promise((r) => setTimeout(r, 0));
+const flush = (ms = 0) => new Promise((r) => setTimeout(r, ms));
+
+/** Hosts the detail page the way the app shell does, so `[id]` changes go through ngOnChanges. */
+@Component({
+	standalone: true,
+	imports: [CrDetailComponent],
+	template: '<app-cr-detail [id]="id"></app-cr-detail>',
+})
+class HostComponent {
+	id = 'CR-1';
+}
+
+async function renderHost(user: ReqUser): Promise<ComponentFixture<HostComponent>> {
+	TestBed.configureTestingModule({
+		imports: [HostComponent],
+		providers: [{ provide: SessionService, useValue: { user } }],
+	});
+	await TestBed.compileComponents();
+	const fixture = TestBed.createComponent(HostComponent);
+	fixture.detectChanges();
+	await flush();
+	fixture.detectChanges();
+	return fixture;
+}
+
+const title = (fixture: ComponentFixture<unknown>): string | undefined =>
+	fixture.nativeElement.querySelector('.cr-detail__header h2')?.textContent;
 
 async function render(user: ReqUser, id: string): Promise<ComponentFixture<CrDetailComponent>> {
 	TestBed.configureTestingModule({
@@ -68,6 +96,46 @@ describe('CrDetailComponent', () => {
 			fixture.detectChanges();
 			expect(fixture.nativeElement.querySelector('.cr-timeline__empty')).not.toBeNull();
 			expect(fixture.nativeElement.querySelector('.cr-timeline__list')).toBeNull();
+		});
+	});
+
+	describe('switching to another CR', () => {
+		it('reloads and renders the new CR when the id input changes', async () => {
+			const fixture = await renderHost(users.approver);
+			expect(title(fixture)).toBe('Add 1 unit of SKU-A');
+
+			fixture.componentInstance.id = 'CR-2';
+			fixture.detectChanges(); // ngOnChanges -> load()
+			expect(fixture.nativeElement.querySelector('.cr-detail__loading')).not.toBeNull();
+			await flush();
+			fixture.detectChanges();
+			expect(title(fixture)).toBe('Replace SKU-B supplier');
+		});
+
+		it('ignores a slow response for a CR that is no longer selected', async () => {
+			const fixture = await renderHost(users.approver);
+			const api = TestBed.inject(CrApiService);
+
+			api.latencyMs = 50; // CR-2 request is slow...
+			fixture.componentInstance.id = 'CR-2';
+			fixture.detectChanges();
+			api.latencyMs = 0; // ...and the user moves on to CR-3, which answers first
+			fixture.componentInstance.id = 'CR-3';
+			fixture.detectChanges();
+
+			await flush(80); // both responses have now arrived, CR-2 last
+			fixture.detectChanges();
+			expect(title(fixture)).toBe('Extend agreement term');
+		});
+
+		it('clears a half-typed reject reason from the previous CR', async () => {
+			const fixture = await renderHost(users.approver);
+			const detail = fixture.debugElement.children[0].componentInstance as CrDetailComponent;
+			detail.rejectControl.setValue('typed for CR-1');
+
+			fixture.componentInstance.id = 'CR-3';
+			fixture.detectChanges();
+			expect(detail.rejectControl.value).toBe('');
 		});
 	});
 });
