@@ -54,10 +54,9 @@ export class CrDetailComponent implements OnInit {
 		return this.detail ? computeDiff(this.detail.baselineLineItems, this.detail.proposedLineItems) : [];
 	}
 
-	/** Approval timeline, oldest-first. */
+	/** Approval timeline, oldest-first. Sorts a copy so the loaded CR data is never changed. */
 	get timeline(): TimelineEntry[] {
-		// TODO: return the audit entries ordered chronologically (oldest first).
-		return this.detail?.audit ?? [];
+		return [...(this.detail?.audit ?? [])].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 	}
 
 	/** Shared gate: CR is pending, belongs to the user's org, and the user's role allows approval. */

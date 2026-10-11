@@ -38,6 +38,16 @@
   instead of a raw number.
 - The existing loading / error (with Retry) / empty states are unchanged.
 
+**Task 3: Change Request detail** (`src/components/cr-detail/`)
+- **Chronological timeline.** `timeline` sorts a copy of `audit` oldest-first by `Date.parse(at)`
+  (CR-1's history arrives newest-first from the API). Sorting a copy keeps the loaded data untouched;
+  JavaScript's sort is stable, so entries with the same timestamp keep the API's order.
+- **Readable timestamps.** Each entry renders as `<time datetime="…">` formatted with the `date` pipe in
+  UTC (e.g. "Mar 2, 2026, 9:00:00 AM UTC"); the raw ISO value stays in `datetime`.
+- **Empty history.** A CR with no audit entries shows "No history recorded yet." instead of an empty list.
+- Tests: oldest-first order (CR-1), already-ordered history unchanged (CR-2), loaded data not reordered,
+  UTC formatting + `datetime`, empty-history message.
+
 **Repo hygiene**
 - Added `.DS_Store` to `.gitignore` and removed it from tracking (it was in the initial commit).
 - Kept the changed files Prettier-clean to match the project style (`printWidth: 140`).
@@ -64,6 +74,9 @@ rendered state can be traced back to a small, explicit set of fields.
 
 | Invariant | How / where |
 |---|---|
+| Loaded API data is never changed by the view | `visibleRows` (list) and `timeline` (detail) return new arrays (`filter`, sort on a copy) |
+| The timeline always reads oldest → newest, whatever order the API sends | `timeline` getter in `cr-detail.component.ts` |
+| Approve/Reject are only enabled for a pending CR in the user's org, for a user with an approve policy | `canAct` getter, bound to `[disabled]` / `*ngIf` in `cr-detail.component.html` |
 
 ## 4. Testing strategy
 <!-- What you tested (component/DOM vs pure) and why; what you deliberately skipped given the budget. -->
@@ -81,6 +94,8 @@ rendered state can be traced back to a small, explicit set of fields.
   would look like a broken page; a message plus a one-click reset tells the user why and how to recover.
 - **The filter is client-side.** The mock API returns the whole org list in one call, so filtering the
   loaded rows is enough; with a paged real API this would move to a query parameter.
+- **Timeline times are shown in UTC.** This makes the display, and the tests, the same on every machine.
+  A production app would show the reviewer's local time zone instead.
 
 ## 6. Where I used AI
 -
