@@ -1,5 +1,4 @@
 # Implementation Notes
-
 ## 1. What I changed
 
 **Task 1: Fixed the two failing tests at the root cause**
@@ -16,15 +15,13 @@
 **Task 3: Detail** (`cr-detail/`)
 - Timeline sorted oldest-first, with readable UTC times and an empty-history message.
 - Diff panel and totals/delta rendered from the loaded CR.
-- **Bug fix:** selecting another CR didn't reload the detail (`load()` only ran in `ngOnInit`). It now
-  reloads in `ngOnChanges`, and a `requestSeq` counter drops responses for a CR the user has already left.
+- **Bug fix:** selecting another CR didn't reload the detail (`load()` only ran in `ngOnInit`). It now reloads in `ngOnChanges`, and a `requestSeq` counter drops responses for a CR the user has already left.
 - Reject reason must contain real text (not just spaces), max 500 characters, and is sent trimmed.
 - Approve/Reject share one `runAction()` flow:
   - It runs only if the user can act and nothing else is in flight, so a double click sends one request.
   - While waiting, the controls are locked and the button reads "Approving…" / "Rejecting…".
   - On success, the CR returned by the API replaces the loaded one (status, timeline and actions update).
-  - On failure, it re-reads the CR before showing the error, because the change may have been saved anyway.
-    The last known CR stays on screen.
+  - On failure, it re-reads the CR before showing the error, because the change may have been saved anyway. The last known CR stays on screen.
 
 **Task 4: Read-only and UX states**
 - A hint explains why actions are unavailable (read-only access, other org, or not pending).
@@ -87,7 +84,7 @@ Also: `.DS_Store` added to `.gitignore`, and changed files kept Prettier-clean.
 - Read-only users see a disabled Approve button (the provided test expects it) but no reject form.
 
 ## 6. Where I used AI
- I used AI to help plan the logic implementation, so I could tackle the tasks in a clear, logical order. After planning, I rewrote parts of the code myself to fix the existing errors, then reviewed the formatting and tested the code to confirm it works and produces the expected output.
+I used AI to help plan the logic implementation, so I could tackle the tasks in a clear, logical order, and to debug tooling issues. After planning, I rewrote parts of the code myself to fix the existing errors, then reviewed the formatting and tested the code to confirm it works and produces the expected output.I made some edits myself, decided the judgment calls (e.g. re-reading the CR after a failed action, the 500-character limit), and checked everything with the tests and in the browser.
 
 ## 7. What I'd improve with more time
 - Safer Approve/Reject: prevent duplicate requests and handle a CR that someone else already approved or rejected.
