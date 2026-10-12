@@ -60,6 +60,28 @@ describe('CrDetailComponent', () => {
 		expect(approveBtn.disabled).toBe(true);
 	});
 
+	describe('diff panel and totals', () => {
+		it('renders one row per SKU with its change kind and before/after values', async () => {
+			const fixture = await render(users.approver, 'CR-1'); // SKU-A 10 -> 11, SKU-B untouched
+			const rows = Array.from(fixture.nativeElement.querySelectorAll('.cr-diff__row') as NodeListOf<HTMLElement>);
+
+			expect(rows.map((r) => r.getAttribute('data-kind'))).toEqual(['changed', 'unchanged']);
+			const cells = Array.from(rows[0].querySelectorAll('td')).map((td) => td.textContent);
+			expect(cells).toEqual(['SKU-A', 'changed', '10 × USD 500.00', '11 × USD 500.00']);
+		});
+
+		it('marks a description-only change (supplier swap) as changed', async () => {
+			const fixture = await render(users.approver, 'CR-2');
+			expect(fixture.nativeElement.querySelector('.cr-diff__row').getAttribute('data-kind')).toBe('changed');
+		});
+
+		it('shows baseline → new totals and the delta as money', async () => {
+			const fixture = await render(users.approver, 'CR-1');
+			const totals = fixture.nativeElement.querySelector('.cr-detail__totals').textContent.replace(/\s+/g, ' ').trim();
+			expect(totals).toBe('USD 8,000.00 → USD 8,500.00 (Δ USD 500.00)');
+		});
+	});
+
 	describe('timeline', () => {
 		const actions = (fixture: ComponentFixture<CrDetailComponent>): string[] =>
 			Array.from(fixture.nativeElement.querySelectorAll('.cr-timeline__action') as NodeListOf<HTMLElement>).map(

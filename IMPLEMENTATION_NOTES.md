@@ -100,6 +100,16 @@
   hint when the user can act, the hint appearing after approving, `(changed)` emitted on success and on an
   applied-anyway failure but not on a plain failure, the not-found error with Retry, and the idle placeholder.
 
+**Task 5: Tests** — 52 tests in total (7 provided, 45 added); see section 4 for the approach.
+- **List** (`cr-list.component.spec.ts`, 2 → 11): loading message while slow, error + Retry recovering,
+  filter narrowing both the table and `visibleRows`, `ALL` restoring rows without a reload, the no-matches
+  message (distinct from empty), **Show all** resetting rows and dropdown, formatted delta, row click
+  emitting the id, org scoping.
+- **Diff** (`diff.spec.ts`, 3 → 8): price-only and description-only changes, identical lines unchanged,
+  empty inputs, row order and which side each row carries.
+- **Detail** (`cr-detail.component.spec.ts`, 2 → 33): the rendered diff panel and totals/delta, plus the
+  timeline, CR switching, validation, action, failure and read-only tests listed under Tasks 3–4.
+
 **Repo hygiene**
 - Added `.DS_Store` to `.gitignore` and removed it from tracking (it was in the initial commit).
 - Kept the changed files Prettier-clean to match the project style (`printWidth: 140`).
@@ -141,7 +151,27 @@ rendered state can be traced back to a small, explicit set of fields.
 ## 4. Testing strategy
 <!-- What you tested (component/DOM vs pure) and why; what you deliberately skipped given the budget. -->
 
--
+- **Mostly rendered-DOM tests.** The components are tested through TestBed by reading what the user would
+  see (row ids, button `disabled`, alert text, `data-kind`, timeline order) and acting the way the user would
+  (choosing a filter, typing a reason, blurring the field, clicking buttons). This pins behavior rather than
+  implementation details, so refactors that keep the UI the same keep the tests green.
+- **Pure unit tests only where the logic is pure.** `computeDiff` is tested directly, because its edge cases
+  (price/description/quantity changes, ordering, empty inputs) are easier to enumerate without a template.
+  The rendered diff panel then has a smaller set of DOM tests on top.
+- **Real async, no real delays.** Slow and failing responses come from the mock API's own `latencyMs` and
+  `failNext`, with short waits (≤ 80 ms). Where a test needs a specific failure (e.g. "the action fails but
+  nothing was saved", or "the re-read also fails"), a Jest spy replaces one call with a promise that rejects
+  on a timer, like a real network error. (An already-rejected promise is reported by Zone.js as uncaught
+  before the component's `await` handles it, so the timer is needed.)
+- **Switching CRs through a host component.** Tests that change the selected CR render the detail inside a
+  tiny host with `[id]="id"`, so `ngOnChanges` runs exactly as it does in the app shell.
+- **Checking that the tests can fail.** For each safeguard and feature (double-submit guard, permission
+  guard, re-read after failure, stale-response checks, trimming, blank validation, filter, no-matches,
+  Show all, delta formatting, each diff comparison) I temporarily broke the code and confirmed at least one
+  test failed, then restored it.
+- **Deliberately not tested:** the demo app shell (`src/app/`, glue for the walkthrough, not part of the
+  exercise), CSS/visual styling, and keyboard/screen-reader behavior beyond `role="alert"`/`aria-busy`
+  being present. Browser-level end-to-end tests (e.g. Playwright) would be the next step with more time.
 
 ## 5. Assumptions
 <!-- Where the requirements left room for interpretation, the calls you made and why. -->
