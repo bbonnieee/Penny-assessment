@@ -285,8 +285,83 @@ describe('CrDetailComponent', () => {
 			expect(fixture.nativeElement.querySelector('.cr-actions__error')).toBeNull();
 			expect(detail.pendingAction).toBeNull();
 		});
+
+		it('emits (changed) with the updated CR after a successful action', async () => {
+			const fixture = await render(users.approver, 'CR-1');
+			const emitted: CrDetail[] = [];
+			fixture.componentInstance.changed.subscribe((cr) => emitted.push(cr));
+			approveBtn(fixture).click();
+			await settle(fixture);
+			expect(emitted.map((cr) => cr.status)).toEqual(['APPROVED']);
+		});
+
+		it('emits (changed) when a failed request was applied anyway, but not when nothing changed', async () => {
+			const fixture = await render(users.approver, 'CR-1');
+			const api = TestBed.inject(CrApiService);
+			const emitted: CrDetail[] = [];
+			fixture.componentInstance.changed.subscribe((cr) => emitted.push(cr));
+
+			jest.spyOn(api, 'approve').mockImplementationOnce(() => failsLater('Server unavailable'));
+			approveBtn(fixture).click();
+			await settle(fixture, 10);
+			expect(emitted).toEqual([]);
+
+			api.failNext = true;
+			approveBtn(fixture).click();
+			await settle(fixture, 10);
+			expect(emitted.map((cr) => cr.status)).toEqual(['APPROVED']);
+		});
+	});
+
+	describe('read-only and explanatory states', () => {
+		it('tells a read-only user why they cannot act, and offers no reject form', async () => {
+			const fixture = await render(users.viewer, 'CR-1');
+			expect(hintText(fixture)).toBe('You have read-only access, so you can’t approve or reject change requests.');
+			expect(approveBtn(fixture).disabled).toBe(true);
+			expect(fixture.nativeElement.querySelector('.cr-actions__reject')).toBeNull();
+		});
+
+		it('explains that only pending CRs can be acted on', async () => {
+			const fixture = await render(users.approver, 'CR-2'); // APPLIED
+			expect(hintText(fixture)).toBe('This change request is APPLIED. Only change requests pending approval can be approved or rejected.');
+			expect(approveBtn(fixture).disabled).toBe(true);
+			expect(fixture.nativeElement.querySelector('.cr-actions__reject')).toBeNull();
+		});
+
+		it('shows no hint when the user can act', async () => {
+			const fixture = await render(users.approver, 'CR-1');
+			expect(fixture.nativeElement.querySelector('.cr-actions__hint')).toBeNull();
+			expect(approveBtn(fixture).disabled).toBe(false);
+		});
+
+		it('replaces the actions with the hint once the CR has been approved', async () => {
+			const fixture = await render(users.approver, 'CR-1');
+			approveBtn(fixture).click();
+			await settle(fixture);
+			expect(hintText(fixture)).toContain('This change request is APPROVED.');
+		});
+
+		it('shows an error with Retry for a CR outside the user’s org, and Retry reloads', async () => {
+			const fixture = await render(users.approver, 'CR-9'); // org-beta CR, user is org-alpha
+			expect(fixture.nativeElement.querySelector('.cr-detail__error').textContent).toContain('Not found');
+			expect(fixture.nativeElement.querySelector('.cr-detail__header')).toBeNull();
+
+			fixture.componentInstance.id = 'CR-1';
+			(fixture.nativeElement.querySelector('.cr-detail__error button') as HTMLButtonElement).click();
+			await settle(fixture);
+			expect(title(fixture)).toBe('Add 1 unit of SKU-A');
+		});
+
+		it('shows a placeholder instead of a blank panel before anything is loaded', async () => {
+			const fixture = await render(users.approver, 'CR-1');
+			fixture.componentInstance.state = { status: 'idle', data: null };
+			fixture.detectChanges();
+			expect(fixture.nativeElement.querySelector('.cr-detail__idle').textContent).toContain('Select a change request');
+		});
 	});
 });
+
+const hintText = (f: ComponentFixture<unknown>) => el(f, '.cr-actions__hint')?.textContent;
 
 async function settle(fixture: ComponentFixture<unknown>, ms = 0): Promise<void> {
 	await flush(ms);

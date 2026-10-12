@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, OnInit, SimpleChanges } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormControl, ReactiveFormsModule, ValidatorFn, Validators } from '@angular/forms';
 import { CrApiService } from '../../api/cr-api.service';
@@ -28,6 +28,8 @@ export type CrAction = 'approve' | 'reject';
 })
 export class CrDetailComponent implements OnInit, OnChanges {
 	@Input() id!: string;
+	/** Emits the CR after an action changed it, so a parent (e.g. the list) can refresh. */
+	@Output() changed = new EventEmitter<CrDetail>();
 
 	readonly reasonMax = REJECT_REASON_MAX;
 
@@ -111,6 +113,16 @@ export class CrDetailComponent implements OnInit, OnChanges {
 		return this.canAct;
 	}
 
+	/** Why the actions are unavailable, or null when the user can act (or nothing is loaded). */
+	get actionHint(): string | null {
+		const cr = this.detail;
+		const user = this.session.user;
+		if (!cr || this.canAct) return null;
+		if (!canApprovePolicy(user)) return 'You have read-only access, so you can’t approve or reject change requests.';
+		if (cr.orgCode !== user.orgCode) return 'This change request belongs to another organization.';
+		return `This change request is ${cr.status}. Only change requests pending approval can be approved or rejected.`;
+	}
+
 	fmt(amount: number): string {
 		return this.detail ? formatMoney(amount, this.detail.currency) : String(amount);
 	}
@@ -143,6 +155,7 @@ export class CrDetailComponent implements OnInit, OnChanges {
 			if (seq !== this.requestSeq) return;
 			this.state = { status: 'loaded', data: updated };
 			this.rejectControl.reset();
+			this.changed.emit(updated);
 		} catch (err) {
 			if (seq !== this.requestSeq) return;
 			// The request failed, but it may still have been applied on the server, so re-read the CR
@@ -151,10 +164,12 @@ export class CrDetailComponent implements OnInit, OnChanges {
 			if (seq !== this.requestSeq) return;
 			if (latest) this.state = { status: 'loaded', data: latest };
 			const message = (err as Error).message;
-			this.actionError =
-				latest && latest.status !== statusBefore
-					? `The ${action} request reported an error (${message}), but the change request is now ${latest.status}.`
-					: `Couldn't ${action} this change request: ${message}. Please try again.`;
+			if (latest && latest.status !== statusBefore) {
+				this.actionError = `The ${action} request reported an error (${message}), but the change request is now ${latest.status}.`;
+				this.changed.emit(latest);
+			} else {
+				this.actionError = `Couldn't ${action} this change request: ${message}. Please try again.`;
+			}
 		} finally {
 			if (seq === this.requestSeq) {
 				this.pendingAction = null;

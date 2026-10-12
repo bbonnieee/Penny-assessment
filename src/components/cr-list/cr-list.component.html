@@ -9,6 +9,8 @@
 		</label>
 	</header>
 
+	<p *ngIf="state.status === 'idle'" class="cr-list__idle">Change requests will appear here.</p>
+
 	<p *ngIf="state.status === 'loading'" class="cr-list__loading" role="status">Loading change requests…</p>
 
 	<div *ngIf="state.status === 'error'" class="cr-list__error" role="alert">

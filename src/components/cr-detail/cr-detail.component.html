@@ -1,4 +1,6 @@
 <section class="cr-detail">
+	<p *ngIf="state.status === 'idle'" class="cr-detail__idle">Select a change request to review it.</p>
+
 	<p *ngIf="state.status === 'loading'" class="cr-detail__loading" role="status">Loading change request…</p>
 
 	<div *ngIf="state.status === 'error'" class="cr-detail__error" role="alert">
@@ -51,6 +53,7 @@
 		<!-- Actions -->
 		<section class="cr-actions" [attr.aria-busy]="submitting">
 			<p *ngIf="actionError" class="cr-actions__error" role="alert">{{ actionError }}</p>
+			<p *ngIf="actionHint" class="cr-actions__hint">{{ actionHint }}</p>
 
 			<button type="button" class="cr-actions__approve" [disabled]="!canApprove || submitting" (click)="approve()">
 				{{ pendingAction === 'approve' ? 'Approving…' : 'Approve' }}

@@ -6,9 +6,18 @@
 			<option *ngFor="let key of userKeys" [value]="key" [selected]="session.user.id === users[key]?.id">{{ key }}</option>
 		</select>
 	</label>
+	<div class="app-demo-controls" aria-label="Demo network controls">
+		<label>
+			<input type="checkbox" [checked]="api.latencyMs > 0" (change)="setSlowNetwork($any($event.target).checked)" />
+			Slow network
+		</label>
+		<button type="button" (click)="failNextRequest()" [disabled]="api.failNext">
+			{{ api.failNext ? 'Next request will fail' : 'Fail next request' }}
+		</button>
+	</div>
 </header>
 
 <main class="app-layout" *ngIf="show">
 	<app-cr-list (select)="onSelect($event)"></app-cr-list>
-	<app-cr-detail *ngIf="selectedId" [id]="selectedId"></app-cr-detail>
+	<app-cr-detail *ngIf="selectedId" [id]="selectedId" (changed)="onCrChanged()"></app-cr-detail>
 </main>

@@ -55,3 +55,14 @@ button:disabled {
 .cr-diff__row[data-kind='removed'] {
 	background: #fdecea;
 }
+.app-demo-controls {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	font-size: 0.9rem;
+}
+.cr-actions__hint,
+.cr-detail__idle,
+.cr-list__idle {
+	color: #555;
+}

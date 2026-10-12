@@ -83,6 +83,23 @@
   also fails, a read-only user calling `approve()` directly, and an approve finishing after a CR switch.
   For each safeguard I temporarily removed it and confirmed at least one of these tests fails.
 
+**Task 4: Read-only and UX states**
+- **Why the actions are unavailable.** An `actionHint` getter explains it in one line under the actions:
+  read-only access, a CR from another organization, or a CR that isn't `PENDING_APPROVAL` (it names the
+  current status). It is `null` whenever the user can act, so the hint and enabled actions never show together.
+- **No blank panels.** Both components now render their `idle` state ("Change requests will appear here." /
+  "Select a change request to review it."). Together with the existing loading, empty, error (with Retry)
+  and no-matches states, every `ViewState` has visible output.
+- **List stays in sync after an action.** The detail emits `(changed)` with the updated CR after a
+  successful action, or after a failed one the server applied anyway. The app shell reloads the list on
+  that event so its Status column matches the detail.
+- **Demo controls in the app shell** (`src/app/`, demo glue only): a "Slow network" checkbox
+  (`latencyMs = 1500`) and a "Fail next request" button (`failNext = true`), so slow and failing responses
+  can be shown in the browser without editing code.
+- Tests: the read-only hint and no reject form for the viewer, the "only pending" hint on an APPLIED CR, no
+  hint when the user can act, the hint appearing after approving, `(changed)` emitted on success and on an
+  applied-anyway failure but not on a plain failure, the not-found error with Retry, and the idle placeholder.
+
 **Repo hygiene**
 - Added `.DS_Store` to `.gitignore` and removed it from tracking (it was in the initial commit).
 - Kept the changed files Prettier-clean to match the project style (`printWidth: 140`).
@@ -118,6 +135,8 @@ rendered state can be traced back to a small, explicit set of fields.
 | Reject never reaches the API without a valid, trimmed reason | `notBlank` + `maxLength` validators; `reject()` re-checks validity and trims |
 | After an action, the screen shows what the server actually has | success uses the returned CR; failure re-reads the CR before showing the error |
 | An action error never blanks the page | errors go to `actionError`; `state` keeps the last known CR |
+| Disabled actions always come with a reason | `actionHint` is non-null exactly when a CR is loaded and `canAct` is false |
+| Every view state renders something | `idle`, `loading`, `empty`, `error` and no-matches each have their own element in the templates |
 
 ## 4. Testing strategy
 <!-- What you tested (component/DOM vs pure) and why; what you deliberately skipped given the budget. -->
